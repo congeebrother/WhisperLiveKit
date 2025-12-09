@@ -26,13 +26,13 @@ ENV PATH="/opt/venv/bin:$PATH"
 
 # timeout/retries for large torch wheels
 RUN pip3 install --upgrade pip setuptools wheel && \
-    pip3 --disable-pip-version-check install --timeout=120 --retries=5 \
-        --index-url https://download.pytorch.org/whl/cu129 \
+    pip3 --disable-pip-version-check install --no-cache-dir --timeout=120 --retries=5 \
+        --index-url https://download.pytorch.org/whl/cu124 \
         torch torchaudio \
     || (echo "Initial install failed — retrying with extended timeout..." && \
-        pip3 --disable-pip-version-check install --timeout=300 --retries=3 \
-            --index-url https://download.pytorch.org/whl/cu129 \
-            torch torchvision torchaudio)
+        pip3 --disable-pip-version-check install --no-cache-dir --timeout=300 --retries=3 \
+            --index-url https://download.pytorch.org/whl/cu124 \
+            torch torchaudio)
 
 COPY . .
 
