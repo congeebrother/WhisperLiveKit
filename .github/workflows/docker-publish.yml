@@ -51,7 +51,9 @@ jobs:
       - name: Build Docker image
         id: build
         run: |
-          TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:main"
+          # Convert image name to lowercase
+          IMAGE_NAME_LOWER=$(echo "${{ env.IMAGE_NAME }}" | tr '[:upper:]' '[:lower:]')
+          TAG="${{ env.REGISTRY }}/$IMAGE_NAME_LOWER:main"
           echo "Building image: $TAG"
           docker build -t "$TAG" .
           echo "tag=$TAG" >> $GITHUB_OUTPUT
