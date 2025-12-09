@@ -1,10 +1,11 @@
 import os
 import subprocess
 import sys
+import io
 from modelscope.hub.api import HubApi
 from tqdm import tqdm
 
-class ProgressReader:
+class ProgressReader(io.BufferedIOBase):
     def __init__(self, stream, total_size):
         self.stream = stream
         self.pbar = tqdm(total=total_size, unit='B', unit_scale=True, unit_divisor=1024, desc="Uploading")
@@ -17,6 +18,10 @@ class ProgressReader:
 
     def close(self):
         self.pbar.close()
+        # Do not close the underlying stream here if it's managed elsewhere, 
+        # or call super().close() if needed.
+        # But here self.stream is process.stdout, we might want to leave it to the main logic.
+        pass
 
 def get_image_size(image_tag):
     try:
