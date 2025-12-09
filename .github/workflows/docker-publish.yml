@@ -55,7 +55,8 @@ jobs:
           IMAGE_NAME_LOWER=$(echo "${{ env.IMAGE_NAME }}" | tr '[:upper:]' '[:lower:]')
           TAG="${{ env.REGISTRY }}/$IMAGE_NAME_LOWER:main"
           echo "Building image: $TAG"
-          docker build -t "$TAG" .
+          # Use -f to specify the Dockerfile
+          docker build -f Dockerfile -t "$TAG" .
           echo "tag=$TAG" >> $GITHUB_OUTPUT
 
       - name: Push Docker image to GHCR
@@ -73,6 +74,7 @@ jobs:
         run: pip install modelscope
 
       - name: Upload to ModelScope (Streamed)
+        timeout-minutes: 120
         env:
           MODELSCOPE_TOKEN: ${{ secrets.MODELSCOPE_TOKEN }}
           MODELSCOPE_REPO_ID: ${{ secrets.MODELSCOPE_REPO_ID }}
