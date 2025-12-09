@@ -48,27 +48,32 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
 
-      - name: Build and Load Docker image
-        uses: docker/build-push-action@f2a1d5e99d037542a71f64918e516c093c6f3fc4
-        with:
-          context: .
-          load: true
-          push: false
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-
-      - name: Push Docker image
+      - name: Build Docker image
+        id: build
         run: |
-          TAG="${{ fromJSON(steps.meta.outputs.json).tags[0] }}"
+          TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:main"
+          echo "Building image: $TAG"
+          docker build -t "$TAG" .
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+
+      - name: Push Docker image to GHCR
+        run: |
+          TAG="${{ steps.build.outputs.tag }}"
           echo "Pushing image: $TAG"
           docker push "$TAG"
 
-      - name: Save Docker image
+      - name: Prune Docker System
         run: |
-          # Get the first tag from the metadata
-          TAG="${{ fromJSON(steps.meta.outputs.json).tags[0] }}"
-          echo "Saving image to whisperlivekit.tar.gz"
-          docker save "$TAG" | gzip > whisperlivekit.tar.gz
+          echo "Pruning docker system to free up space..."
+          docker system prune -a -f --filter "label!=org.opencontainers.image.source=${{ github.repository }}" || true
+          # We need to keep the image we just built, but prune others.
+          # Since we tagged it, it shouldn't be pruned by 'prune -a' if it's in use? 
+          # Actually 'prune -a' removes all unused images.
+          # We just pushed it, so it's technically "unused" by any container.
+          # So we should be careful.
+          # Let's just prune dangling and build cache.
+          docker image prune -f
+          docker builder prune -f
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -78,21 +83,11 @@ jobs:
       - name: Install ModelScope
         run: pip install modelscope
 
-      - name: Upload to ModelScope
+      - name: Upload to ModelScope (Streamed)
         env:
           MODELSCOPE_TOKEN: ${{ secrets.MODELSCOPE_TOKEN }}
           MODELSCOPE_REPO_ID: ${{ secrets.MODELSCOPE_REPO_ID }}
         run: |
-          if [ -z "$MODELSCOPE_TOKEN" ]; then
-            echo "Error: MODELSCOPE_TOKEN secret is not set."
-            exit 1
-          fi
-          if [ -z "$MODELSCOPE_REPO_ID" ]; then
-            echo "Error: MODELSCOPE_REPO_ID secret is not set."
-            exit 1
-          fi
-          
-          echo "Uploading whisperlivekit.tar.gz to ModelScope repo: $MODELSCOPE_REPO_ID"
-          # Usage: modelscope upload <repo_id> <local_path> <path_in_repo> --token <token>
-          modelscope upload "$MODELSCOPE_REPO_ID" whisperlivekit.tar.gz whisperlivekit.tar.gz --token "$MODELSCOPE_TOKEN"
+          TAG="${{ steps.build.outputs.tag }}"
+          python scripts/upload_to_modelscope.py "$TAG"
 
