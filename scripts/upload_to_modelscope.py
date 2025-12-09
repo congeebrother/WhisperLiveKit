@@ -16,12 +16,12 @@ class ProgressReader(io.BufferedIOBase):
             self.pbar.update(len(chunk))
         return chunk
 
+    def readable(self):
+        return True
+
     def close(self):
         self.pbar.close()
-        # Do not close the underlying stream here if it's managed elsewhere, 
-        # or call super().close() if needed.
-        # But here self.stream is process.stdout, we might want to leave it to the main logic.
-        pass
+        # Do not close the underlying stream here if it's managed elsewhere
 
 def get_image_size(image_tag):
     try:
@@ -34,6 +34,36 @@ def get_image_size(image_tag):
     except Exception as e:
         print(f"Failed to get image size: {e}")
         return None
+
+def upload_local_file(file_path, repo_id, token):
+    print(f"Logging in to ModelScope...")
+    api = HubApi()
+    api.login(token)
+    
+    if not os.path.exists(file_path):
+        print(f"File not found: {file_path}")
+        sys.exit(1)
+
+    total_size = os.path.getsize(file_path)
+    print(f"File size: {total_size / (1024*1024):.2f} MB")
+    print(f"Uploading {file_path} to ModelScope repo: {repo_id}...")
+
+    with open(file_path, 'rb') as f:
+        wrapped_stream = ProgressReader(f, total_size)
+        try:
+            api.upload_file(
+                path_or_fileobj=wrapped_stream,
+                path_in_repo=os.path.basename(file_path),
+                repo_id=repo_id,
+                commit_message='Test upload local file',
+                commit_description='Uploaded via local test'
+            )
+            print("\nUpload completed successfully.")
+        except Exception as e:
+            print(f"\nUpload failed: {e}")
+            sys.exit(1)
+        finally:
+            wrapped_stream.close()
 
 def upload_docker_image(image_tag, repo_id, token):
     print(f"Logging in to ModelScope...")
@@ -89,11 +119,23 @@ def upload_docker_image(image_tag, repo_id, token):
 if __name__ == "__main__":
     token = os.environ.get('MODELSCOPE_TOKEN')
     repo_id = os.environ.get('MODELSCOPE_REPO_ID')
-    image_tag = sys.argv[1] if len(sys.argv) > 1 else None
-
-    if not token or not repo_id or not image_tag:
-        print("Usage: python upload_to_modelscope.py <image_tag>")
-        print("Environment variables MODELSCOPE_TOKEN and MODELSCOPE_REPO_ID must be set.")
+    
+    if len(sys.argv) < 2:
+        print("Usage: python upload_to_modelscope.py <image_tag> OR --local-file <file_path>")
         sys.exit(1)
 
-    upload_docker_image(image_tag, repo_id, token)
+    if sys.argv[1] == "--local-file":
+        if len(sys.argv) < 3:
+             print("Usage: python upload_to_modelscope.py --local-file <file_path>")
+             sys.exit(1)
+        file_path = sys.argv[2]
+        if not token or not repo_id:
+             print("Environment variables MODELSCOPE_TOKEN and MODELSCOPE_REPO_ID must be set.")
+             sys.exit(1)
+        upload_local_file(file_path, repo_id, token)
+    else:
+        image_tag = sys.argv[1]
+        if not token or not repo_id:
+             print("Environment variables MODELSCOPE_TOKEN and MODELSCOPE_REPO_ID must be set.")
+             sys.exit(1)
+        upload_docker_image(image_tag, repo_id, token)
