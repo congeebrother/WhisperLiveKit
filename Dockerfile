@@ -19,6 +19,7 @@ RUN apt-get update && \
         build-essential \
         python3-dev \
         ca-certificates && \
+    apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
 RUN python3 -m venv /opt/venv
@@ -32,7 +33,8 @@ RUN pip3 install --upgrade pip setuptools wheel && \
     || (echo "Initial install failed — retrying with extended timeout..." && \
         pip3 --disable-pip-version-check install --no-cache-dir --timeout=300 --retries=3 \
             --index-url https://download.pytorch.org/whl/cu129 \
-            torch torchvision torchaudio)
+            torch torchvision torchaudio) && \
+    rm -rf /root/.cache/pip
 
 COPY . .
 
