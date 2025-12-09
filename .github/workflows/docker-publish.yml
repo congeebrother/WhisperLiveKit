@@ -64,19 +64,6 @@ jobs:
           echo "Pushing image: $TAG"
           docker push "$TAG"
 
-      - name: Prune Docker System
-        run: |
-          echo "Pruning docker system to free up space..."
-          docker system prune -a -f --filter "label!=org.opencontainers.image.source=${{ github.repository }}" || true
-          # We need to keep the image we just built, but prune others.
-          # Since we tagged it, it shouldn't be pruned by 'prune -a' if it's in use? 
-          # Actually 'prune -a' removes all unused images.
-          # We just pushed it, so it's technically "unused" by any container.
-          # So we should be careful.
-          # Let's just prune dangling and build cache.
-          docker image prune -f
-          docker builder prune -f
-
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
