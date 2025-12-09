@@ -1,0 +1,77 @@
+name: Create and publish a Docker image
+
+on:
+  push:
+    branches: ['main']
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build-and-push-image:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@65b78e6e13532edd9afa3aa52ac7964289d1a9c1
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@9ec57ed1fcdbf14dcef7dfbe97b2010124a938b7
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@f2a1d5e99d037542a71f64918e516c093c6f3fc4
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Pull and Save Docker image
+        run: |
+          # Get the first tag from the metadata
+          TAG="${{ fromJSON(steps.meta.outputs.json).tags[0] }}"
+          echo "Pulling image: $TAG"
+          docker pull "$TAG"
+          echo "Saving image to whisperlivekit.tar"
+          docker save "$TAG" -o whisperlivekit.tar
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install ModelScope
+        run: pip install modelscope
+
+      - name: Upload to ModelScope
+        env:
+          MODELSCOPE_TOKEN: ${{ secrets.MODELSCOPE_TOKEN }}
+          MODELSCOPE_REPO_ID: ${{ secrets.MODELSCOPE_REPO_ID }}
+        run: |
+          if [ -z "$MODELSCOPE_TOKEN" ]; then
+            echo "Error: MODELSCOPE_TOKEN secret is not set."
+            exit 1
+          fi
+          if [ -z "$MODELSCOPE_REPO_ID" ]; then
+            echo "Error: MODELSCOPE_REPO_ID secret is not set."
+            exit 1
+          fi
+          
+          echo "Uploading whisperlivekit.tar to ModelScope repo: $MODELSCOPE_REPO_ID"
+          # Usage: modelscope upload <repo_id> <local_path> <path_in_repo> --token <token>
+          modelscope upload "$MODELSCOPE_REPO_ID" whisperlivekit.tar whisperlivekit.tar --token "$MODELSCOPE_TOKEN"
+
